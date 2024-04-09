@@ -1,0 +1,115 @@
+﻿@{
+    ViewData["Title"] = "即時聊天範例";
+}
+
+<h1>即時聊天範例</h1>
+
+<div class="row">
+    <div class="col-8">
+        <h4>個人 ID: <span id="SelfID"></span></h4>
+        <button type="button" class="btn btn-primary" id="getidButton">連線取得ID</button>
+        <div class="mb-3">
+            <label for="message" class="form-label">發送訊息</label>
+            <input type="text" class="form-control" id="message">
+        </div>
+        <div class="mb-3">
+            <label for="sendToID" class="form-label">指定 ID</label>
+            @*<input type="text" class="form-control" id="sendToID">*@
+            <select name="sendToID" id="sendToID" size="3" class="form-select form-select-lg mb-3"></select>
+        </div>
+        <button type="button" class="btn btn-primary" id="sendButton">傳送訊息</button>
+    </div>
+    <div class="col-4">
+        <h4>聊天室在線人員</h4>
+        <ul class="list-group" id="IDList">
+        </ul>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <h3>聊天內容</h3>
+        <ul class="list-group" id="Content">
+        </ul>
+    </div>
+</div>
+
+@section scripts{
+    <script src="~/js/signalr/dist/browser/signalr.js"></script>
+    <script>
+        var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
+
+        $('#getidButton').on('click', function () {
+            start();
+        });
+
+        connection.onclose(async () => {
+            await start();
+        });
+
+        // 更新用戶個人連線 ID 事件
+        connection.on("UpdSelfID", function (id) {
+            $('#SelfID').html(id);
+        });
+
+        // 更新連線 ID 列表事件
+        connection.on("UpdList", function (jsonList) {
+            var list = JSON.parse(jsonList);
+            $("#IDList li").remove();
+            $("#sendToID").empty();
+            $('#sendToID').append($('<option>', {
+                value: '',
+                text: 'All',
+                selected: true
+            }));
+            for (i = 0; i < list.length; i++) {
+                $("#IDList").append($("<li></li>").attr("class", "list-group-item").text(list[i]));
+                if (list[i] != $('#SelfID').html()) {
+                    $('#sendToID').append($('<option>', {
+                        value: list[i],
+                        text: list[i]
+                    }));
+                }
+
+            }
+        });
+
+
+        // 動態更新聊天內容事件
+        connection.on("UpdContent", function (msg) {
+            $("#Content").append($("<li></li>").attr("class", "list-group-item").text(msg));
+        });
+
+        //傳送訊息
+        $('#sendButton').on('click', function () {
+            if ($('#message').val() == '') {
+                alert('發送訊息未輸入!');
+                return false;
+            }
+            let selfID = $('#SelfID').html();
+            let message = $('#message').val();
+            let sendToID = $('#sendToID').val();
+            connection.invoke("SendMessage", selfID, message, sendToID).catch(function (err) {
+                alert('傳送錯誤: ' + err.toString());
+                return false;
+            });
+
+            $("#message").val('');
+        });
+
+        //與Server建立連線
+        async function start() {
+            try {
+                if (connection.state != 'Connected')
+                {
+                    console.log(connection.state);
+                    await connection.start();
+                }
+                console.log("Hub 連線完成");
+            } catch (err) {
+                alert('連線錯誤: ' + err.toString());
+                setTimeout(start, 5000);
+            }
+        };
+    </script>
+}
